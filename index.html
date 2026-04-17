@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KT Cloud TECH UP — 굿바이 랜딩페이지</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ── STAR CANVAS ── -->
+<canvas id="starCanvas"></canvas>
+
+<!-- ── HEADER ── -->
+<header class="site-header">
+  <img src="images/logo-white.png" alt="KT Cloud TECH UP" class="header-logo" />
+  <nav class="header-nav">
+    <span class="header-badge">🚀 수료 축하</span>
+    <button class="btn-admin-login" id="adminLoginBtn" title="관리자 로그인">
+      <i class="fa-solid fa-lock"></i>
+      <span class="admin-login-txt">관리자</span>
+    </button>
+  </nav>
+</header>
+
+<!-- ── ADMIN LOGIN MODAL ── -->
+<div class="modal-overlay" id="adminLoginOverlay">
+  <div class="modal-box admin-login-box" id="adminLoginBox">
+    <button class="modal-close" id="closeAdminLogin"><i class="fa-solid fa-xmark"></i></button>
+    <div class="admin-login-icon">🔐</div>
+    <h3 class="modal-title">관리자 인증</h3>
+    <p class="modal-desc">관리자 비밀번호를 입력해주세요.</p>
+    <form id="adminLoginForm" onsubmit="return false;">
+      <input type="text" name="username" value="admin" autocomplete="username" style="display:none;" />
+      <div class="form-group">
+        <label>비밀번호</label>
+        <div class="pw-input-wrap">
+          <input type="password" id="adminPwInput" placeholder="비밀번호 입력" autocomplete="current-password" />
+          <button type="button" class="pw-toggle" id="pwToggle"><i class="fa-solid fa-eye"></i></button>
+        </div>
+        <p class="pw-error" id="pwError"></p>
+      </div>
+      <button type="submit" class="btn-submit" id="adminLoginConfirm">
+        <i class="fa-solid fa-unlock"></i>
+        로그인
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ── HERO ── -->
+<section class="hero" id="hero">
+  <div class="hero-content">
+    <p class="hero-eyebrow">kt cloud TECH UP</p>
+    <h1 class="hero-title">
+      <span class="gradient-text">Good Bye</span><br/>
+      kt cloud TECH UP<br/>
+      <span class="hero-title-sub">1기 챌린저 여러분</span>
+    </h1>
+    <p class="hero-sub">함께한 모든 순간들이 빛났습니다 ✨<br/>수고하셨습니다, 그리고 정말 감사합니다.</p>
+    <div class="hero-stats">
+      <div class="stat-item">
+        <span class="stat-label">함께한 시간 ⏱️</span>
+        <span class="stat-num">1,056<span class="stat-unit">시간</span></span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">함께한 챌린저 🛸</span>
+        <span class="stat-num">119<span class="stat-unit">명</span></span>
+      </div>
+    </div>
+    <button class="btn-write" id="openModal">
+      <i class="fa-solid fa-pen-nib"></i>
+      축하 메시지 남기기
+    </button>
+  </div>
+</section>
+
+<!-- ── MESSAGE WALL ── -->
+<section class="message-wall" id="messageWall">
+  <div class="wall-header">
+    <h2 class="wall-title">💬 챌린저들의 이야기</h2>
+    <p class="wall-sub">서로를 향한 진심 어린 축하 메시지</p>
+  </div>
+  <div class="cards-grid" id="cardsGrid">
+    <!-- 카드들이 여기에 동적으로 추가됨 -->
+  </div>
+  <div class="load-more-wrap" id="loadMoreWrap" style="display:none;">
+    <button class="btn-load-more" id="loadMoreBtn">더 보기</button>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer class="site-footer">
+  <img src="images/logo-white.png" alt="KT Cloud TECH UP" class="footer-logo" />
+  <p class="footer-text">kt cloud TECH UP 수료를 진심으로 축하합니다 🎉</p>
+  <p class="footer-copy">© 2025 KT Cloud. All rights reserved.</p>
+</footer>
+
+<!-- ── WRITE MODAL ── -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box" id="modalBox">
+    <button class="modal-close" id="closeModal"><i class="fa-solid fa-xmark"></i></button>
+    <h3 class="modal-title">✍️ 축하 메시지 남기기</h3>
+    <p class="modal-desc">함께한 챌린저들에게 축하와 응원을 전해보세요!</p>
+
+    <form id="messageForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label>이름 <span class="req">*</span></label>
+          <input type="text" id="inputName" placeholder="홍길동" maxlength="20" required />
+        </div>
+        <div class="form-group">
+          <label>과정명</label>
+          <input type="text" id="inputRole" placeholder="클라우드 네이티브 개발" maxlength="30" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>대표 이모지</label>
+        <div class="emoji-picker" id="emojiPicker">
+          <button type="button" class="emoji-btn active" data-emoji="🚀">🚀</button>
+          <button type="button" class="emoji-btn" data-emoji="✨">✨</button>
+          <button type="button" class="emoji-btn" data-emoji="🌟">🌟</button>
+          <button type="button" class="emoji-btn" data-emoji="💫">💫</button>
+          <button type="button" class="emoji-btn" data-emoji="🎉">🎉</button>
+          <button type="button" class="emoji-btn" data-emoji="🏆">🏆</button>
+          <button type="button" class="emoji-btn" data-emoji="💡">💡</button>
+          <button type="button" class="emoji-btn" data-emoji="⚡">⚡</button>
+          <button type="button" class="emoji-btn" data-emoji="🌈">🌈</button>
+          <button type="button" class="emoji-btn" data-emoji="💎">💎</button>
+          <button type="button" class="emoji-btn" data-emoji="🔥">🔥</button>
+          <button type="button" class="emoji-btn" data-emoji="🌙">🌙</button>
+          <button type="button" class="emoji-btn" data-emoji="🎯">🎯</button>
+          <button type="button" class="emoji-btn" data-emoji="🦋">🦋</button>
+          <button type="button" class="emoji-btn" data-emoji="🌺">🌺</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>카드 색상</label>
+        <div class="gradient-picker" id="gradientPicker">
+          <button type="button" class="grad-btn active" data-grad="purple-blue" style="background: linear-gradient(135deg, #7c3aed, #2563eb)"></button>
+          <button type="button" class="grad-btn" data-grad="blue-cyan" style="background: linear-gradient(135deg, #2563eb, #06b6d4)"></button>
+          <button type="button" class="grad-btn" data-grad="green-teal" style="background: linear-gradient(135deg, #059669, #0891b2)"></button>
+          <button type="button" class="grad-btn" data-grad="rose-pink" style="background: linear-gradient(135deg, #e11d48, #db2777)"></button>
+          <button type="button" class="grad-btn" data-grad="amber-orange" style="background: linear-gradient(135deg, #d97706, #ea580c)"></button>
+          <button type="button" class="grad-btn" data-grad="indigo-violet" style="background: linear-gradient(135deg, #4338ca, #7c3aed)"></button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>해시태그 <span class="hint">(쉼표로 구분, 최대 3개)</span></label>
+        <input type="text" id="inputTags" placeholder="#성장, #도전, #클라우드" maxlength="60" />
+      </div>
+
+      <div class="form-group">
+        <label>메시지 <span class="req">*</span></label>
+        <textarea id="inputMessage" placeholder="함께한 챌린저들에게 진심 어린 축하와 응원의 메시지를 남겨주세요 ✨" maxlength="300" required></textarea>
+        <span class="char-count"><span id="charNum">0</span> / 300</span>
+      </div>
+
+      <button type="submit" class="btn-submit" id="submitBtn">
+        <i class="fa-solid fa-paper-plane"></i>
+        메시지 등록하기
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div class="toast" id="toast"></div>
+
+<!-- ── ADMIN LOGOUT BAR ── -->
+<div class="admin-bar" id="adminBar" style="display:none;">
+  <span><i class="fa-solid fa-shield-halved"></i> 관리자 모드 활성화 — 카드의 ❌ 아이콘을 클릭하면 삭제됩니다.</span>
+  <button class="btn-admin-logout" id="adminLogoutBtn"><i class="fa-solid fa-right-from-bracket"></i> 로그아웃</button>
+</div>
+
+<!-- ── FAB ── -->
+<button class="fab" id="fabBtn" aria-label="메시지 작성">
+  <i class="fa-solid fa-pen-nib"></i>
+</button>
+
+<script src="js/stars.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
