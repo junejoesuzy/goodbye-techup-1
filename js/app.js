@@ -1,16 +1,36 @@
 /* ==========================================
    KT Cloud TECH UP — App Logic
-   GitHub Pages 배포 버전 (localStorage 기반)
+   Firebase Firestore 연동 버전
    ========================================== */
 'use strict';
 
-const STORAGE_KEY  = 'ktcloud_techup_messages';
-const ADMIN_PW     = 'ktcloud05!';
-const ADMIN_KEY    = 'ktcloud_admin_auth';
-const PAGE_LIMIT   = 20;
+// ── Firebase Config ──
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, getDocs,
+  deleteDoc, doc, query, orderBy, limit, startAfter
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-let allMessages   = [];   // 전체 메시지 배열 (최신순)
-let displayCount  = PAGE_LIMIT;
+const firebaseConfig = {
+  apiKey:            "AIzaSyDvOuoTdVNM0hpJ_TpXQmxEz6gdTkz8BdM",
+  authDomain:        "lastday-tech-up-1.firebaseapp.com",
+  projectId:         "lastday-tech-up-1",
+  storageBucket:     "lastday-tech-up-1.firebasestorage.app",
+  messagingSenderId: "176007963262",
+  appId:             "1:176007963262:web:25600fa1fd4b4520c1ee2f"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db          = getFirestore(firebaseApp);
+const COL         = 'messages';
+const PAGE_LIMIT  = 20;
+
+const ADMIN_PW  = 'ktcloud05!';
+const ADMIN_KEY = 'ktcloud_admin_auth';
+
+let lastDoc       = null;   // 페이지네이션용 마지막 문서
+let totalLoaded   = 0;
+let hasMore       = false;
 let selectedEmoji = '🚀';
 let selectedGrad  = 'purple-blue';
 let isSubmitting  = false;
@@ -41,24 +61,6 @@ const adminLoginConfirm = document.getElementById('adminLoginConfirm');
 const adminBar          = document.getElementById('adminBar');
 const adminLogoutBtn    = document.getElementById('adminLogoutBtn');
 
-// ── localStorage helpers ──
-function loadStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function saveStorage(data) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch { console.warn('localStorage 저장 실패'); }
-}
-
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-}
-
 // ── Utility ──
 function showToast(msg, duration = 3000) {
   toastEl.textContent = msg;
@@ -66,21 +68,9 @@ function showToast(msg, duration = 3000) {
   setTimeout(() => toastEl.classList.remove('show'), duration);
 }
 
-function animateCount(el, target) {
-  let current = parseInt(el.textContent) || 0;
-  if (current === target) return;
-  const step = target > current ? Math.ceil((target - current) / 30) : -1;
-  const timer = setInterval(() => {
-    current = step > 0
-      ? Math.min(current + step, target)
-      : Math.max(current + step, target);
-    el.textContent = current;
-    if (current === target) clearInterval(timer);
-  }, 30);
-}
-
 function formatDate(ts) {
-  const d = new Date(ts);
+  if (!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
   const M = d.getMonth() + 1;
   const D = d.getDate();
   const h = String(d.getHours()).padStart(2, '0');
@@ -140,28 +130,35 @@ function addDeleteBtn(card) {
   card.appendChild(btn);
 }
 
-function deleteCard(card) {
+async function deleteCard(card) {
   const id = card.dataset.id;
   if (!id) return;
   if (!confirm('이 메시지를 삭제하시겠습니까?')) return;
 
   card.classList.add('deleting');
-  setTimeout(() => {
-    // 배열에서 제거
-    allMessages = allMessages.filter(m => m.id !== id);
-    saveStorage(allMessages);
-    card.remove();
-    if (msgCountEl) animateCount(msgCountEl, allMessages.length);
-    showToast('🗑️ 카드가 삭제됐습니다.');
-    if (cardsGrid.querySelectorAll('.msg-card').length === 0) showEmpty();
+  setTimeout(async () => {
+    try {
+      await deleteDoc(doc(db, COL, id));
+      card.remove();
+      totalLoaded = Math.max(0, totalLoaded - 1);
+      showToast('🗑️ 카드가 삭제됐습니다.');
+      if (cardsGrid.querySelectorAll('.msg-card').length === 0) showEmpty();
+    } catch (err) {
+      card.classList.remove('deleting');
+      showToast('❌ 삭제에 실패했습니다.');
+      console.error(err);
+    }
   }, 350);
 }
 
 // ── Render Card ──
-function renderCard(msg, prepend = false) {
+function renderCard(docSnap, prepend = false) {
+  const msg  = docSnap.data ? docSnap.data() : docSnap;
+  const id   = docSnap.id   || msg.id || '';
+
   const card = document.createElement('article');
   card.className = `msg-card grad-${msg.gradient || 'purple-blue'}`;
-  card.dataset.id = msg.id;
+  card.dataset.id = id;
   card.style.animationDelay = prepend ? '0ms' : `${Math.random() * 200}ms`;
 
   const tags = parseTags(msg.tags);
@@ -196,7 +193,7 @@ function renderCard(msg, prepend = false) {
   }
 }
 
-// ── Show loader / empty ──
+// ── Show Empty ──
 function showEmpty() {
   cardsGrid.innerHTML = `
     <div class="empty-state">
@@ -206,34 +203,64 @@ function showEmpty() {
   `;
 }
 
-// ── Load Messages ──
-function loadMessages() {
-  allMessages = loadStorage(); // 최신순 정렬 (저장 시 unshift로 맨 앞에 추가)
-  cardsGrid.innerHTML = '';
+function showLoader() {
+  const el = document.createElement('div');
+  el.className = 'loader-wrap';
+  el.innerHTML = '<div class="loader"></div>';
+  el.id = 'loaderEl';
+  cardsGrid.appendChild(el);
+}
 
-  if (allMessages.length === 0) {
-    showEmpty();
-    loadMoreWrap.style.display = 'none';
-    if (msgCountEl) msgCountEl.textContent = '0';
-    return;
+function hideLoader() {
+  const el = document.getElementById('loaderEl');
+  if (el) el.remove();
+}
+
+// ── Load Messages (Firestore) ──
+async function loadMessages(append = false) {
+  if (!append) {
+    cardsGrid.innerHTML = '';
+    lastDoc = null;
+    totalLoaded = 0;
   }
+  showLoader();
 
-  if (msgCountEl) animateCount(msgCountEl, allMessages.length);
+  try {
+    let q;
+    if (lastDoc) {
+      q = query(collection(db, COL), orderBy('created_at', 'desc'), startAfter(lastDoc), limit(PAGE_LIMIT));
+    } else {
+      q = query(collection(db, COL), orderBy('created_at', 'desc'), limit(PAGE_LIMIT));
+    }
 
-  const visible = allMessages.slice(0, displayCount);
-  visible.forEach(msg => renderCard(msg));
+    const snapshot = await getDocs(q);
+    hideLoader();
 
-  loadMoreWrap.style.display = allMessages.length > displayCount ? 'block' : 'none';
+    if (snapshot.empty && !append) {
+      showEmpty();
+      loadMoreWrap.style.display = 'none';
+      return;
+    }
+
+    snapshot.forEach(docSnap => {
+      renderCard(docSnap);
+      lastDoc = docSnap;
+      totalLoaded++;
+    });
+
+    hasMore = snapshot.size === PAGE_LIMIT;
+    loadMoreWrap.style.display = hasMore ? 'block' : 'none';
+
+  } catch (err) {
+    hideLoader();
+    console.error('메시지 로드 실패:', err);
+    if (!append) showEmpty();
+    showToast('⚠️ 메시지를 불러오지 못했습니다.');
+  }
 }
 
 // ── Load More ──
-loadMoreBtn.addEventListener('click', () => {
-  displayCount += PAGE_LIMIT;
-  // 추가로 보여줄 카드만 렌더
-  const extra = allMessages.slice(displayCount - PAGE_LIMIT, displayCount);
-  extra.forEach(msg => renderCard(msg));
-  loadMoreWrap.style.display = allMessages.length > displayCount ? 'block' : 'none';
-});
+loadMoreBtn.addEventListener('click', () => loadMessages(true));
 
 // ── Write Modal ──
 function openModal() {
@@ -344,38 +371,42 @@ messageForm.addEventListener('submit', async (e) => {
   submitBtn.disabled = true;
   submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 등록 중...';
 
-  const newMsg = {
-    id:         generateId(),
-    name,
-    role,
-    message,
-    emoji:      selectedEmoji,
-    gradient:   selectedGrad,
-    tags:       parseTags(tagsRaw),
-    created_at: Date.now(),
-  };
+  try {
+    const payload = {
+      name,
+      role,
+      message,
+      emoji:      selectedEmoji,
+      gradient:   selectedGrad,
+      tags:       parseTags(tagsRaw),
+      created_at: new Date(),
+    };
 
-  // 최신순 앞에 추가
-  allMessages.unshift(newMsg);
-  saveStorage(allMessages);
+    const docRef = await addDoc(collection(db, COL), payload);
 
-  // 빈 상태면 초기화 후 렌더
-  const emptyEl = cardsGrid.querySelector('.empty-state');
-  if (emptyEl) cardsGrid.innerHTML = '';
+    // 빈 상태 제거
+    const emptyEl = cardsGrid.querySelector('.empty-state');
+    if (emptyEl) cardsGrid.innerHTML = '';
 
-  renderCard(newMsg, true);
-  if (msgCountEl) animateCount(msgCountEl, allMessages.length);
+    // 새 카드 맨 앞에 삽입
+    renderCard({ id: docRef.id, data: () => payload }, true);
+    totalLoaded++;
 
-  closeModal();
-  messageForm.reset();
-  charNumEl.textContent = '0';
-  resetPickers();
-  showToast('🎉 메시지가 등록되었습니다!');
-  document.getElementById('messageWall').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    closeModal();
+    messageForm.reset();
+    charNumEl.textContent = '0';
+    resetPickers();
+    showToast('🎉 메시지가 등록되었습니다!');
+    document.getElementById('messageWall').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  isSubmitting = false;
-  submitBtn.disabled = false;
-  submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 메시지 등록하기';
+  } catch (err) {
+    console.error(err);
+    showToast('❌ 등록에 실패했습니다. 다시 시도해주세요.');
+  } finally {
+    isSubmitting = false;
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> 메시지 등록하기';
+  }
 });
 
 function resetPickers() {
@@ -388,7 +419,6 @@ function resetPickers() {
 // ── Init ──
 loadMessages();
 
-// 세션 복원 (새로고침 후 관리자 모드 유지)
 if (sessionStorage.getItem(ADMIN_KEY) === '1') {
-  setTimeout(enterAdminMode, 500);
+  setTimeout(enterAdminMode, 600);
 }
